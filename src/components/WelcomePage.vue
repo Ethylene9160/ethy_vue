@@ -2,6 +2,7 @@
   <div class="welcome">
     <h1>Hello, 欢迎来到我的网站！</h1>
     <button @click="goToHomePage" class="btn-go-home">查看主页</button>
+    <button @click="goToLoginPage" class="btn-go-home">登录</button>
   </div>
 </template>
 
@@ -12,7 +13,11 @@ export default {
     goToHomePage() {
       // 点击按钮后跳转到 gitio/index.html 页面
       window.location.href = '/gitio/index.html'; // 直接跳转
-    }
+    },
+    goToLoginPage() {
+      // 点击按钮后跳转到登录页面
+      this.$router.push('/login'); // 使用路由跳转
+    },
   }
 }
 </script>

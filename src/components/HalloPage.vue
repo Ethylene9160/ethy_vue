@@ -2,6 +2,7 @@
   <div class="hall">
     <h1>Welcome to Othello Game!</h1>
     <button @click="checkLoginStatus" class="btn-start">进入游戏</button>
+    <button @click="goToLoginPage" class="btn-start">登录</button>
   </div>
 </template>
 
@@ -17,7 +18,11 @@ export default {
       } else {
         this.$router.push('/game');
       }
-    }
+    },
+
+    goToLoginPage() {
+      this.$router.push('/login');
+    },
   }
 }
 </script>

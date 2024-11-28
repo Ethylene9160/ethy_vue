@@ -1,7 +1,7 @@
 <template>
     <div class="game-page">
       <div class="task-info">
-        <h2>任务: 游戏 1</h2>
+        <h2>Reversi</h2>
         <div class="task-details">
           <div class="avatar"></div>
           <div class="current-piece">
@@ -18,7 +18,7 @@
               class="cell"
               v-for="(cell, colIndex) in row"
               :key="colIndex"
-              :style="{ backgroundColor: cell === 'black' ? 'black' : cell === 'white' ? 'white' : cell === 'valid'? 'blue':'lightgray' }"
+              :style="{ backgroundColor: cell === 'black' ? 'black' : cell === 'white' ? 'white' : cell === 'valid'? '#e3a541':'lightgray' }"
               @click="makeMove(rowIndex, colIndex)"
               :class="{ 'valid-move': validMoves.some(move => move.row === rowIndex && move.col === colIndex) }"
             ></div>
@@ -28,272 +28,270 @@
   
       <div class="chat-box">
         <div class="messages">
-          <p>对手: 你好！</p>
-          <p>我方: 加油！</p>
+          <!-- <p>对手: 你好！</p>
+          <p>我方: 加油！</p> -->
         </div>
         <div class="send-message">
           <input v-model="message" type="text" placeholder="输入消息..." />
           <button @click="sendMessage">发送</button>
         </div>
       </div>
+
+      <div class="user-info">
+        <h2>用户信息</h2>
+        <p>用户名: {{ userName }}</p>
+        <p>积分: {{ userInfo }}</p>
+      </div>
     </div>
   </template>
   
   <script>
-  import { notification } from 'ant-design-vue';
-  
+  // import { notification } from 'ant-design-vue';
+  import othello from '../js/games/othello/othello.js';
+  import timer from '../js/utils/timer.js';
+  import websocket from '../js/utils/websocket.js';
+  import {message} from 'ant-design-vue';
+
   export default {
-    name: 'GamePage',
-    data() {
-      return {
-        timer: 30,
-        currentPieceColor: 'white', // 当前轮到的棋子颜色
-        validMoveColor: 'green',
-        board: Array(8).fill().map(() => Array(8).fill(null)), // 初始化空棋盘
-        validMoves: [], // 可落子位置
-        message: '',
-        ws: null,
-      };
+  name: 'GamePage',
+
+  data() {
+    return {
+      timer: 30,
+      currentPieceColor: 'white',
+      // validMoveColor: 'green',
+      board: Array(8).fill().map(() => Array(8).fill(null)),
+      validMoves: [],
+      userName: localStorage.getItem('user_name'),
+      userInfo: localStorage.getItem('user_info'),
+      count: 4,
+      ws: null,
+    };
+  },
+
+  methods: {
+    initializeBoard() {
+      othello.initializeBoard(this.board);
     },
-    methods: {
-      // 初始化棋盘，设置中间四颗棋子
-      initializeBoard() {
-        this.board[3][3] = 'white';
-        this.board[3][4] = 'black';
-        this.board[4][3] = 'black';
-        this.board[4][4] = 'white';
-      },
-  
-      // 检查位置是否合法
-      checkValidMove(row, col, color) {
-        if (this.board[row][col] !== null) return false;
-  
-        const opponentColor = color === 'white' ? 'black' : 'white';
-        const directions = [
-          [-1, 0], [1, 0], [0, -1], [0, 1], // 横竖四个方向
-          [-1, -1], [-1, 1], [1, -1], [1, 1] // 对角线四个方向
-        ];
-  
-        let valid = false;
-  
-        for (let [dx, dy] of directions) {
-          let x = row + dx;
-          let y = col + dy;
-          let foundOpponent = false;
-  
-          // 持续沿方向遍历，直到越界或者找到自己的棋子
-          while (x >= 0 && x < 8 && y >= 0 && y < 8) {
-            if (this.board[x][y] === opponentColor) {
-              foundOpponent = true;
-            } else if (this.board[x][y] === color && foundOpponent) {
-              valid = true; // 找到围住的对方棋子并且遇到自己的棋子
-              break;
-            } else {
-              break;
-            }
-            x += dx;
-            y += dy;
+
+    initHint(){
+      othello.initHint(this.board, this.currentPieceColor);
+    },
+
+    checkValidMove(row, col, color) {
+      return othello.checkValidMove(this.board, row, col, color);
+    },
+
+    getValidMoves(color) {
+      return othello.getValidMoves(this.board, color);
+    },
+
+    flipDiscs(row, col, color) {
+      othello.flipDiscs(this.board, row, col, color);
+    },
+
+    makeMove(row, col) {
+      // for (let i = 0; i < 8; ++i){
+      //   var line = '';
+      //   for (let j = 0; j < 8; ++j){
+      //     line += this.board[j][i] + '\t';
+      //   }
+      //   console.log(line);
+      // }
+      if (!this.isValidMove(row, col)) {
+        message.error('此位置不可落子');
+        return;
+      }
+
+      this.count+=1;
+      this.board[row][col] = this.currentPieceColor;
+      this.flipDiscs(row, col, this.currentPieceColor);
+      if (this.count == 64) {
+        message.success('游戏结束');
+        return;
+      }
+      this.currentPieceColor = this.currentPieceColor === 'white' ? 'black' : 'white';
+      this.validMoves = this.getValidMoves(this.currentPieceColor);
+
+      // 清除上一轮的可行棋标志
+      this.board.forEach((row, rowIndex) => {
+        row.forEach((cell, colIndex) => {
+          if (cell === 'valid') {
+            this.board[rowIndex][colIndex] = null;
           }
-        }
-  
-        return valid;
-      },
-  
-      // 查找所有合法的落子位置
-      getValidMoves(color) {
-        let moves = [];
-        for (let i = 0; i < 8; i++) {
-          for (let j = 0; j < 8; j++) {
-            if (this.checkValidMove(i, j, color)) {
-              moves.push({ row: i, col: j });
-            }
-          }
-        }
-        return moves;
-      },
-  
-      // 执行翻转
-      flipDiscs(row, col, color) {
-        const opponentColor = color === 'white' ? 'black' : 'white';
-        const directions = [
-          [-1, 0], [1, 0], [0, -1], [0, 1], // 横竖四个方向
-          [-1, -1], [-1, 1], [1, -1], [1, 1] // 对角线四个方向
-        ];
-  
-        // 下子后执行翻转
-        for (let [dx, dy] of directions) {
-          let x = row + dx;
-          let y = col + dy;
-          let flipPositions = [];
-  
-          while (x >= 0 && x < 8 && y >= 0 && y < 8) {
-            if (this.board[x][y] === opponentColor) {
-              flipPositions.push([x, y]);
-            } else if (this.board[x][y] === color) {
-              // 找到自己的棋子时，翻转棋子
-              flipPositions.forEach(([fx, fy]) => {
-                this.board[fx][fy] = color;
-              });
-              break;
-            } else {
-              break;
-            }
-            x += dx;
-            y += dy;
-          }
-        }
-      },
-  
-      // 玩家落子
-      makeMove(row, col) {
-        if (!this.isValidMove(row, col)) {
-          this.showMessage('此位置不可落子');
+        });
+      });
+
+      if (this.validMoves.length === 0) {
+        message.error('当前玩家无法落子，跳过此回合');
+        this.currentPieceColor = this.currentPieceColor === 'white' ? 'black' : 'white';
+        this.validMoves = this.getValidMoves(this.currentPieceColor);
+        if(this.validMoves.length === 0){
+          message.success('游戏结束');
           return;
         }
-  
-        // 更新棋盘
-        this.board[row][col] = this.currentPieceColor;
-  
-        // 执行翻转
-        this.flipDiscs(row, col, this.currentPieceColor);
-  
-        // 切换玩家
-        this.currentPieceColor = this.currentPieceColor === 'white' ? 'black' : 'white';
-  
-        // 清除上一轮的合法落子位置
-        for (var i in this.board) {
-          for( var j in this.board[i]) {
-            if (this.board[i][j] === 'valid') {
-              this.board[i][j] = null;
-            }
-          }
-        }
+      }
 
-        // 获取当前玩家的合法落子位置
-        this.validMoves = this.getValidMoves(this.currentPieceColor);
-        if (this.validMoves.length === 0) {
-          this.showMessage('当前玩家无法落子，跳过此回合');
-          this.currentPieceColor = this.currentPieceColor === 'white' ? 'black' : 'white';
-          this.validMoves = this.getValidMoves(this.currentPieceColor);
+      this.validMoves.forEach(move => {
+        if (this.board[move.row][move.col] === null) {
+          this.board[move.row][move.col] = 'valid';
         }
+      });
+    },
 
-        // 绘制当前玩家的合法落子位置
-        
-        for (let move of this.validMoves) {
-            if (this.board[move.row][move.col] === null) {
-              this.board[move.row][move.col] = 'valid';
-            }
-        }
-      },
-  
-      // 检查是否是有效的落子
-      isValidMove(row, col) {
-        return this.validMoves.some(move => move.row === row && move.col === col);
-      },
-  
-      // 发送棋步到服务器
-      sendMoveToServer(rowIndex, colIndex) {
-        const moveData = {
-          row: rowIndex,
-          col: colIndex,
-          color: this.currentPieceColor,
-          board: this.board,
-        };
-  
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify(moveData));
-        }
-      },
-  
-      handleServerResponse(event) {
-        const response = JSON.parse(event.data);
-        this.board = response.board;
-      },
-  
-      showMessage(msg) {
-        notification.error({
-          message: '提示',
-          description: msg,
-          duration: 2, // 自动关闭
-        });
-      },
-  
-      startTimer() {
-        const interval = setInterval(() => {
-          if (this.timer > 0) {
-            this.timer--;
-          } else {
-            clearInterval(interval);
-          }
-        }, 1000);
-      },
+    isValidMove(row, col) {
+      return this.validMoves.some(move => move.row === row && move.col === col);
     },
-  
-    created() {
-      this.initializeBoard();
-      this.validMoves = this.getValidMoves(this.currentPieceColor);
-  
-      this.ws = new WebSocket('ws://127.0.0.1:8081');
-      this.ws.onopen = () => console.log('WebSocket 连接成功');
-      this.ws.onmessage = this.handleServerResponse;
+
+    handleServerResponse(event) {
+      const response = JSON.parse(event.data);
+      this.board = response.board;
     },
-  
-    mounted() {
-      this.startTimer();
+
+    startTimer() {
+      timer.startTimer(time => {
+        this.timer = time;
+      });
     },
-  };
+  },
+
+  created() {
+    this.initializeBoard();
+    this.validMoves = this.getValidMoves(this.currentPieceColor);
+    this.initHint();
+    // for (let valid in this.validMoves) {
+    //   this.board[valid.row][valid.col] = 'valid';
+    // }
+    this.ws = websocket.createWebSocket('ws://127.0.0.1:8081', this.handleServerResponse);
+  },
+
+  mounted() {
+    this.startTimer();
+  },
+};
   </script>
   
   <style scoped>
   .game-page {
     font-family: 'Arial', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* 水平居中 */
+    justify-content: center; /* 垂直居中 */
+    min-height: 100vh; /* 确保整个页面的高度被占满 */
+    padding: 10px;
   }
-  
+
   .task-info {
     margin-bottom: 20px;
+    text-align: center;
   }
-  
+
   .current-piece span {
     display: inline-block;
     width: 20px;
     height: 20px;
     border-radius: 50%;
   }
-  
+
   .board {
     display: grid;
     grid-template-columns: repeat(8, 50px);
     grid-template-rows: repeat(8, 50px);
     gap: 2px;
+    margin-bottom: 20px;
   }
-  
+
   .cell {
     width: 50px;
     height: 50px;
     cursor: pointer;
     border: 1px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  
+
   .cell.valid-move {
-    background-color: #95e43b;
+    background-color: #e3a541;
   }
-  
+
   .chat-box {
     margin-top: 20px;
+    width: 100%;
   }
-  
+
   .messages {
     max-height: 200px;
     overflow-y: auto;
+    margin-bottom: 10px;
   }
-  
+
   .send-message {
     display: flex;
     justify-content: space-between;
   }
-  
+
   .send-message input {
     width: 80%;
   }
-  </style>
-  
+
+  /* 媒体查询 - 小屏幕设备适配 */
+  @media (max-width: 600px) {
+    .game-page {
+      padding: 5px;
+    }
+
+    .board {
+      grid-template-columns: repeat(8, 40px); /* 减小单元格大小 */
+      grid-template-rows: repeat(8, 40px);
+    }
+
+    .cell {
+      width: 40px;
+      height: 40px;
+    }
+
+    .task-info h2 {
+      font-size: 18px; /* 调整标题大小 */
+    }
+
+    .send-message input {
+      width: 70%; /* 调整输入框的宽度 */
+    }
+
+    .messages {
+      max-height: 150px; /* 限制聊天框的最大高度 */
+    }
+
+    /* .user-info {
+      max-height: 100px;
+      max-width: 100px;
+    } */
+  }
+
+  /* 更小屏幕（例如手机）适配 */
+  @media (max-width: 400px) {
+    .task-info h2 {
+      font-size: 16px; /* 更小的标题 */
+    }
+
+    .board {
+      grid-template-columns: repeat(8, 35px); /* 更小的单元格大小 */
+      grid-template-rows: repeat(8, 35px);
+    }
+
+    .cell {
+      width: 35px;
+      height: 35px;
+    }
+
+    .send-message input {
+      width: 60%; /* 更窄的输入框 */
+    }
+
+    .messages {
+      max-height: 120px; /* 更小的聊天框 */
+    }
+  }
+</style>
