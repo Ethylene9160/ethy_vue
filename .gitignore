@@ -67,6 +67,5 @@ ehthumbs.db
 # vue.config.js
 node_modules/
 npm-debug.log
-package-lock.json
 yarn.lock
 
