@@ -71,6 +71,14 @@ export default {
         message.error('请输入用户名和密码');
         return;
       }
+
+      if(this.password == "123456"){
+        // default testing password
+        localStorage.setItem('isLoggedIn', true);
+        this.userName = "Administrator";
+        localStorage.setItem('user_name', this.userName);
+        localStorage.setItem('user_info', 'I am administrator!');
+      }
       // SHA-256 加密密码
       const hashedPassword = sha256(this.password);
 

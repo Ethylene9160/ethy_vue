@@ -5,7 +5,7 @@
         <div class="task-details">
           <div class="avatar"></div>
           <div class="current-piece">
-            <span :style="{ backgroundColor: currentPieceColor }"></span>
+            <span :style="{ backgroundColor: currentPieceColor === 0 ? 'white' : 'black' }"></span>
           </div>
           <div class="timer">{{ timer }}s</div>
         </div>
@@ -13,12 +13,12 @@
   
       <div class="game-board">
         <div class="board">
-          <div class="row" v-for="(row, rowIndex) in board" :key="rowIndex">
+          <div class="row" v-for="(row, rowIndex) in othe.board" :key="rowIndex">
             <div
               class="cell"
               v-for="(cell, colIndex) in row"
               :key="colIndex"
-              :style="{ backgroundColor: cell === 'black' ? 'black' : cell === 'white' ? 'white' : cell === 'valid'? '#e3a541':'lightgray' }"
+              :style="{ backgroundColor: cell === 1 ? 'black' : cell === 0 ? 'white' : cell === 2 ? '#e3a541':'lightgray' }"
               @click="makeMove(rowIndex, colIndex)"
               :class="{ 'valid-move': validMoves.some(move => move.row === rowIndex && move.col === colIndex) }"
             ></div>
@@ -33,6 +33,9 @@
         </div>
         <div class="send-message">
           <input v-model="message" type="text" placeholder="输入消息..." />
+          <button @click="restart">重新开始</button>
+          <button @click="regret">悔棋</button>
+          <button @click="changeMode">切换AI</button>
           <button @click="sendMessage">发送</button>
         </div>
       </div>
@@ -47,84 +50,65 @@
   
   <script>
   // import { notification } from 'ant-design-vue';
-  import othello from '../js/games/othello/othello.js';
+  import {Othello} from '../js/games/othello/othello.js';
   import timer from '../js/utils/timer.js';
   import websocket from '../js/utils/websocket.js';
   import {message} from 'ant-design-vue';
-
+  const WHITE = 0;
+  const BLACK = 1;
+  const VALID = 2;
+  const EMPTY = -1;
   export default {
   name: 'GamePage',
 
   data() {
     return {
       timer: 30,
-      currentPieceColor: 'white',
-      // validMoveColor: 'green',
-      board: Array(8).fill().map(() => Array(8).fill(null)),
+      currentPieceColor: WHITE,
+      othe: new Othello(0),
       validMoves: [],
       userName: localStorage.getItem('user_name'),
       userInfo: localStorage.getItem('user_info'),
-      count: 4,
       ws: null,
+      aiThinking: false,
     };
   },
 
   methods: {
     initializeBoard() {
-      othello.initializeBoard(this.board);
-    },
-
-    initHint(){
-      othello.initHint(this.board, this.currentPieceColor);
+      this.othe.init_board();
     },
 
     checkValidMove(row, col, color) {
-      return othello.checkValidMove(this.board, row, col, color);
+      return this.othe.checkValidMove(row, col, color);
     },
 
     getValidMoves(color) {
-      return othello.getValidMoves(this.board, color);
+      return this.othe.getValidMoves(color);
     },
 
     flipDiscs(row, col, color) {
-      othello.flipDiscs(this.board, row, col, color);
+      this.othe.flipDiscs(row, col, color);
     },
 
     makeMove(row, col) {
-      // for (let i = 0; i < 8; ++i){
-      //   var line = '';
-      //   for (let j = 0; j < 8; ++j){
-      //     line += this.board[j][i] + '\t';
-      //   }
-      //   console.log(line);
-      // }
       if (!this.isValidMove(row, col)) {
         message.error('此位置不可落子');
         return;
       }
 
-      this.count+=1;
-      this.board[row][col] = this.currentPieceColor;
       this.flipDiscs(row, col, this.currentPieceColor);
-      if (this.count == 64) {
+
+      if (this.othe.isOver()) {
         message.success('游戏结束');
         return;
       }
-      this.currentPieceColor = this.currentPieceColor === 'white' ? 'black' : 'white';
+      this.currentPieceColor = this.currentPieceColor === WHITE ? BLACK : WHITE;
       this.validMoves = this.getValidMoves(this.currentPieceColor);
-
-      // 清除上一轮的可行棋标志
-      this.board.forEach((row, rowIndex) => {
-        row.forEach((cell, colIndex) => {
-          if (cell === 'valid') {
-            this.board[rowIndex][colIndex] = null;
-          }
-        });
-      });
 
       if (this.validMoves.length === 0) {
         message.error('当前玩家无法落子，跳过此回合');
-        this.currentPieceColor = this.currentPieceColor === 'white' ? 'black' : 'white';
+        this.currentPieceColor = this.currentPieceColor === WHITE ? BLACK : WHITE;
         this.validMoves = this.getValidMoves(this.currentPieceColor);
         if(this.validMoves.length === 0){
           message.success('游戏结束');
@@ -133,10 +117,21 @@
       }
 
       this.validMoves.forEach(move => {
-        if (this.board[move.row][move.col] === null) {
-          this.board[move.row][move.col] = 'valid';
+        if (this.othe.board[move.row][move.col] === EMPTY) {
+          this.othe.board[move.row][move.col] = VALID;
         }
       });
+
+      // 如果是 AI 模式，并且此时轮到 AI，就延迟走一步
+      if (this.othe.mode) {   // 这里按你实际字段名替换
+        // 假设 human 固定是 WHITE，AI 是 BLACK（或你自定义）
+        // const isAITurn = (this.currentPieceColor); // 例子：AI=黑
+        // if (isAITurn) {
+        this.aiStepWithDelay();
+        // }
+      }
+
+
     },
 
     isValidMove(row, col) {
@@ -145,7 +140,7 @@
 
     handleServerResponse(event) {
       const response = JSON.parse(event.data);
-      this.board = response.board;
+      // this.board = response.board;
     },
 
     startTimer() {
@@ -153,21 +148,95 @@
         this.timer = time;
       });
     },
+
+
+    restart() {
+      this.initializeBoard();
+      this.currentPieceColor = WHITE;
+      this.validMoves = this.getValidMoves(this.currentPieceColor);
+      this.timer = 30;
+      message.success('游戏已重新开始');
+    },
+
+    regret() {
+      const prevColor = this.othe.regret();
+      if (prevColor === EMPTY) {
+        message.error('无法悔棋');
+        return;
+      }
+      this.currentPieceColor = prevColor;
+      this.validMoves = this.getValidMoves(this.currentPieceColor);
+      message.success('悔棋成功');
+    },
+
+    changeMode() {
+      this.othe.switchMode();
+    },
+
+    m_sleep_ms(ms){
+      return new Promise(resolve => setTimeout(resolve, ms));
+    },
+
+    async aiStepWithDelay() {
+  if (this.aiThinking) return;
+  this.aiThinking = true;
+
+  try {
+    // 暂停约 1 秒
+    await this.m_sleep_ms(250);
+
+    // AI 落子（会在 Othello 内部修改 board）
+    this.othe.randomAIMove(1 - this.currentPieceColor);
+
+    // 刷新棋盘 UI
+    // this.forceBoardRefresh();
+
+    // 结束判定
+    if (this.othe.isOver()) {
+      message.success('游戏结束');
+      return;
+    }
+
+    // 切回人类
+    this.currentPieceColor = this.currentPieceColor === WHITE ? BLACK : WHITE;
+    this.validMoves = this.getValidMoves(this.currentPieceColor);
+
+    // 让手处理（保持和你 makeMove 一致）
+    if (this.validMoves.length === 0) {
+      message.error('当前玩家无法落子，跳过此回合');
+      this.currentPieceColor = this.currentPieceColor === WHITE ? BLACK : WHITE;
+      this.validMoves = this.getValidMoves(this.currentPieceColor);
+
+      if (this.validMoves.length === 0) {
+        message.success('游戏结束');
+        return;
+      }
+    }
+
+    // 如果你仍然用 VALID 写进 board（不推荐，但先兼容）
+    this.validMoves.forEach(move => {
+      if (this.othe.board[move.row][move.col] === EMPTY) {
+        this.othe.board[move.row][move.col] = VALID;
+      }
+    });
+
+    // this.forceBoardRefresh();
+  } finally {
+    this.aiThinking = false;
+  }
+},
   },
 
   created() {
     this.initializeBoard();
     this.validMoves = this.getValidMoves(this.currentPieceColor);
-    this.initHint();
-    // for (let valid in this.validMoves) {
-    //   this.board[valid.row][valid.col] = 'valid';
-    // }
     this.ws = websocket.createWebSocket('ws://127.0.0.1:8081', this.handleServerResponse);
   },
 
   mounted() {
     this.startTimer();
   },
+
 };
   </script>
   
