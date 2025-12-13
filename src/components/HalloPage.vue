@@ -35,7 +35,7 @@ export default {
 
 .btn-start {
   padding: 10px 20px;
-  background-color: #48c9b0;
+  background-color: #2D3C81;
   color: white;
   border: none;
   border-radius: 5px;
@@ -43,6 +43,20 @@ export default {
 }
 
 .btn-start:hover {
-  background-color: #1abc9c;
+  background-color: #4EA4EF;
 }
+/* furina colors: 
+#141521
+#2D3C81
+#4EA4EF
+#DAE2ED
+#937562
+
+Enhanced:
+#161824
+#344291
+#58A8EB
+#DCE4EE
+#A07D64
+*/
 </style>

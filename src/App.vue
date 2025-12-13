@@ -20,4 +20,19 @@ export default {
   color: #2c3e50;
   margin: 0;
 }
+
+/* furina colors: 
+#141521
+#2D3C81
+#4EA4EF
+#DAE2ED
+#937562
+
+Enhanced:
+#161824
+#344291
+#58A8EB
+#DCE4EE
+#A07D64
+*/
 </style>

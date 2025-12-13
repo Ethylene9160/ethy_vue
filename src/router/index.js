@@ -1,6 +1,6 @@
 // router/index.js
 
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHashHistory } from 'vue-router';
 import HallPage from '../components/HalloPage.vue'; // 欢迎页面
 import GamePage from '../components/GamePage.vue'; // 黑白棋页面
 import LoginPage from '../components/LoginPage.vue'; // 登录页面
@@ -12,7 +12,7 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(process.env.BASE_URL),
   routes,
 });
 
